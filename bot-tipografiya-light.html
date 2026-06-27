@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ИИ-менеджер для типографии — умный Telegram-бот</title>
+<style>
+  :root{
+    --bg:#eef1f7;
+    --paper:#ffffff;
+    --ink:#0a0e1a;
+    --muted:#5b6477;
+    --line:rgba(10,16,40,.08);
+    --blue:#2563eb;
+    --cyan:#06b6d4;
+    --indigo:#4f46e5;
+    --grid:rgba(37,99,235,.07);
+    --shadow:0 24px 60px rgba(20,40,90,.10);
+    --shadow-sm:0 8px 24px rgba(20,40,90,.07);
+    --mono:"SF Mono",ui-monospace,"Roboto Mono",Menlo,Consolas,monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    background:var(--bg);color:var(--ink);overflow-x:hidden;line-height:1.5;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  ::selection{background:var(--blue);color:#fff}
+
+  /* --- techno background layers --- */
+  .bg-grid{position:fixed;inset:-2px;z-index:0;pointer-events:none;
+    background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+    background-size:46px 46px;mask-image:radial-gradient(circle at 50% 30%,#000 0%,transparent 85%);
+    -webkit-mask-image:radial-gradient(circle at 50% 30%,#000 0%,transparent 85%);
+    animation:gridDrift 24s linear infinite;
+  }
+  @keyframes gridDrift{from{background-position:0 0,0 0}to{background-position:46px 46px,46px 46px}}
+  #fx{position:fixed;inset:0;z-index:1;pointer-events:none}
+  .scanline{position:fixed;left:0;right:0;height:140px;z-index:1;pointer-events:none;
+    background:linear-gradient(180deg,transparent,rgba(37,99,235,.05),transparent);
+    animation:scan 9s linear infinite}
+  @keyframes scan{from{transform:translateY(-160px)}to{transform:translateY(100vh)}}
+  .progress{position:fixed;top:0;left:0;height:3px;width:0;z-index:50;
+    background:linear-gradient(90deg,var(--cyan),var(--blue),var(--indigo));box-shadow:0 0 12px rgba(37,99,235,.6)}
+
+  .wrap{position:relative;z-index:3}
+  section{position:relative;padding:130px 24px;max-width:1180px;margin:0 auto}
+
+  /* reveal */
+  .reveal{opacity:0;transform:translateY(38px);transition:opacity 1s cubic-bezier(.16,1,.3,1),transform 1s cubic-bezier(.16,1,.3,1)}
+  .reveal.in{opacity:1;transform:none}
+  .d1{transition-delay:.07s}.d2{transition-delay:.14s}.d3{transition-delay:.21s}
+  .d4{transition-delay:.28s}.d5{transition-delay:.35s}.d6{transition-delay:.42s}
+
+  .tag{display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);font-size:12px;letter-spacing:.12em;
+    text-transform:uppercase;color:var(--blue);background:rgba(37,99,235,.07);border:1px solid rgba(37,99,235,.2);
+    padding:7px 13px;border-radius:8px;margin-bottom:20px}
+  .tag::before{content:"";width:7px;height:7px;border-radius:2px;background:var(--cyan);box-shadow:0 0 8px var(--cyan);animation:tick 1.4s steps(1) infinite}
+  @keyframes tick{50%{opacity:.25}}
+
+  h1{font-size:clamp(40px,7vw,80px);line-height:1.02;letter-spacing:-.035em;font-weight:800}
+  h2{font-size:clamp(30px,4.7vw,54px);line-height:1.06;letter-spacing:-.03em;font-weight:800}
+  .lead{font-size:clamp(17px,2.1vw,22px);color:var(--muted);max-width:640px;margin-top:22px}
+  .grad{background:linear-gradient(110deg,var(--cyan),var(--blue) 50%,var(--indigo));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .char{display:inline-block;opacity:0;transform:translateY(.5em) rotate(4deg);transition:opacity .6s,transform .6s}
+  .char.in{opacity:1;transform:none}
+
+  /* HERO */
+  .hero{min-height:100vh;display:grid;grid-template-columns:1.05fr .95fr;align-items:center;gap:30px;padding-top:110px;padding-bottom:70px}
+  .hero-copy{max-width:580px}
+  .live{display:inline-flex;align-items:center;gap:9px;font-family:var(--mono);font-size:13px;color:var(--muted);margin-top:28px}
+  .dot{width:9px;height:9px;border-radius:50%;background:#16c784;box-shadow:0 0 0 0 rgba(22,199,132,.6);animation:pulse 2s infinite}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(22,199,132,.55)}70%{box-shadow:0 0 0 12px rgba(22,199,132,0)}100%{box-shadow:0 0 0 0 rgba(22,199,132,0)}}
+
+  .scroll-cue{position:absolute;bottom:30px;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:8px;color:var(--muted);font-family:var(--mono);font-size:11px;letter-spacing:.1em}
+  .mouse{width:23px;height:37px;border:2px solid var(--line);border-radius:13px;position:relative;background:var(--paper)}
+  .mouse::after{content:"";position:absolute;top:7px;left:50%;width:4px;height:7px;background:var(--blue);border-radius:3px;transform:translateX(-50%);animation:wheel 1.6s infinite}
+  @keyframes wheel{0%{opacity:0;transform:translate(-50%,0)}30%{opacity:1}100%{opacity:0;transform:translate(-50%,12px)}}
+
+  /* ROBOT */
+  .stage{display:flex;justify-content:center;align-items:center;position:relative;will-change:transform}
+  .ring{position:absolute;width:min(480px,86vw);aspect-ratio:1;border-radius:50%;border:1px dashed rgba(37,99,235,.25);animation:spin 40s linear infinite}
+  .ring.r2{width:min(560px,98vw);border-style:solid;border-color:rgba(37,99,235,.08);animation-duration:60s;animation-direction:reverse}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .robot{width:min(400px,82vw);position:relative;z-index:2;filter:drop-shadow(0 36px 50px rgba(37,99,235,.28));animation:breathe 5s ease-in-out infinite}
+  @keyframes breathe{0%,100%{transform:translateY(0)}50%{transform:translateY(-16px)}}
+  .visor{animation:visorGlow 3.5s ease-in-out infinite}
+  @keyframes visorGlow{0%,100%{opacity:.85}50%{opacity:1}}
+  .pupil{animation:look 6s ease-in-out infinite}
+  @keyframes look{0%,40%,100%{transform:translateX(0)}55%,75%{transform:translateX(7px)}}
+  .blink{transform-origin:center;animation:blink 5.5s infinite}
+  @keyframes blink{0%,93%,100%{transform:scaleY(1)}95.5%,97%{transform:scaleY(.08)}}
+  .led{animation:led 2.4s steps(1) infinite}.led.l2{animation-delay:.4s}.led.l3{animation-delay:.8s}
+  @keyframes led{0%,100%{opacity:1}50%{opacity:.25}}
+  .mic-led{animation:micled 1.6s ease-in-out infinite}
+  @keyframes micled{0%,100%{opacity:.4}50%{opacity:1}}
+  .beam{transform-origin:center top;animation:beam 4.5s ease-in-out infinite}
+  @keyframes beam{0%,100%{opacity:0;transform:scaleY(.6)}45%,55%{opacity:.5;transform:scaleY(1)}}
+  .tab-line{stroke-dasharray:60;stroke-dashoffset:60;animation:draw 3s ease-in-out infinite}
+  @keyframes draw{0%{stroke-dashoffset:60}40%,100%{stroke-dashoffset:0}}
+
+  /* marquee */
+  .marquee{overflow:hidden;border-top:1px solid var(--line);border-bottom:1px solid var(--line);background:var(--paper);padding:16px 0;margin-top:0}
+  .track{display:flex;gap:48px;white-space:nowrap;width:max-content;animation:marq 22s linear infinite;font-family:var(--mono);font-size:14px;letter-spacing:.08em;color:var(--muted)}
+  .track span{display:inline-flex;align-items:center;gap:48px}
+  .track b{color:var(--blue);font-weight:600}
+  @keyframes marq{to{transform:translateX(-50%)}}
+
+  /* section head */
+  .head{max-width:700px;margin-bottom:60px}
+  .idx{font-family:var(--mono);font-size:13px;color:var(--muted);opacity:.7;margin-bottom:8px}
+
+  /* cards */
+  .grid{display:grid;gap:18px}
+  .g2{grid-template-columns:repeat(2,1fr)}.g3{grid-template-columns:repeat(3,1fr)}
+  .card{background:var(--paper);border:1px solid var(--line);border-radius:18px;padding:30px;box-shadow:var(--shadow-sm);
+    transition:transform .4s cubic-bezier(.16,1,.3,1),box-shadow .4s,border-color .4s;transform-style:preserve-3d;position:relative;overflow:hidden}
+  .card::after{content:"";position:absolute;inset:0;border-radius:18px;background:radial-gradient(400px circle at var(--mx,50%) var(--my,0%),rgba(37,99,235,.09),transparent 40%);opacity:0;transition:opacity .4s}
+  .card:hover{box-shadow:var(--shadow);border-color:rgba(37,99,235,.3)}
+  .card:hover::after{opacity:1}
+  .card h3{font-size:20px;letter-spacing:-.01em;margin-bottom:10px;font-weight:700}
+  .card p{color:var(--muted);font-size:15.5px}
+  .ico{width:52px;height:52px;border-radius:14px;display:flex;align-items:center;justify-content:center;margin-bottom:18px;font-size:24px;
+    background:linear-gradient(135deg,rgba(6,182,212,.14),rgba(79,70,229,.14));border:1px solid rgba(37,99,235,.18)}
+
+  /* steps */
+  .steps{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;position:relative}
+  .step{background:var(--paper);border:1px solid var(--line);border-radius:18px;padding:28px 22px;box-shadow:var(--shadow-sm);position:relative}
+  .step .n{font-family:var(--mono);font-size:13px;font-weight:700;color:#fff;width:36px;height:36px;border-radius:11px;display:flex;align-items:center;justify-content:center;margin-bottom:18px;background:linear-gradient(135deg,var(--blue),var(--indigo))}
+  .step h3{font-size:18px;margin-bottom:8px}.step p{color:var(--muted);font-size:14.5px}
+  .note{margin-top:28px;text-align:center;color:var(--muted);font-size:15px;border:1px dashed rgba(37,99,235,.3);border-radius:14px;padding:18px 24px;background:rgba(37,99,235,.03);font-family:var(--mono)}
+
+  /* chat */
+  .chat{margin:56px auto 0;max-width:430px;background:var(--paper);border:1px solid var(--line);border-radius:26px;padding:18px;box-shadow:var(--shadow)}
+  .ctop{display:flex;align-items:center;gap:11px;padding:6px 6px 14px;border-bottom:1px solid var(--line)}
+  .av{width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,var(--blue),var(--indigo));display:flex;align-items:center;justify-content:center;font-size:18px;color:#fff}
+  .ctop b{font-size:15px}.ctop span{font-family:var(--mono);font-size:12px;color:#16c784}
+  .msgs{padding:16px 6px 6px;display:flex;flex-direction:column;gap:10px;min-height:230px}
+  .bub{max-width:82%;padding:11px 15px;border-radius:16px;font-size:14.5px;opacity:0;transform:translateY(12px);transition:.55s cubic-bezier(.16,1,.3,1)}
+  .bub.show{opacity:1;transform:none}
+  .bub.in{align-self:flex-end;background:linear-gradient(135deg,var(--blue),var(--indigo));color:#fff;border-bottom-right-radius:4px}
+  .bub.out{align-self:flex-start;background:#f1f4fa;border:1px solid var(--line);border-bottom-left-radius:4px}
+
+  /* stats */
+  .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;text-align:center}
+  .stat{background:var(--paper);border:1px solid var(--line);border-radius:20px;padding:42px 20px;box-shadow:var(--shadow-sm)}
+  .stat .num{font-size:clamp(42px,6vw,70px);font-weight:850;letter-spacing:-.03em;line-height:1;font-feature-settings:"tnum"}
+  .stat .lbl{color:var(--muted);margin-top:12px;font-size:15px}
+  .facts{margin-top:36px;display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+  .fact{display:flex;gap:12px;align-items:flex-start;padding:18px 20px;border:1px solid var(--line);border-radius:14px;background:var(--paper);box-shadow:var(--shadow-sm)}
+  .fact .ck{color:#fff;background:linear-gradient(135deg,var(--cyan),var(--blue));width:24px;height:24px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:13px;flex:none}
+  .fact p{font-size:15px;color:#3a4254}
+
+  /* CTA */
+  .cta{text-align:center;padding-bottom:150px}
+  .cta-card{position:relative;border:1px solid var(--line);border-radius:32px;padding:84px 30px;overflow:hidden;background:var(--paper);box-shadow:var(--shadow)}
+  .cta-card::before{content:"";position:absolute;inset:0;background:
+    radial-gradient(120% 130% at 50% 0%,rgba(37,99,235,.12),transparent 55%),
+    linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+    background-size:auto,40px 40px,40px 40px}
+  .cta-card>*{position:relative}
+  .btn{display:inline-flex;align-items:center;gap:12px;margin-top:36px;font-size:19px;font-weight:700;color:#fff;text-decoration:none;
+    padding:21px 42px;border-radius:100px;background:linear-gradient(120deg,var(--cyan),var(--blue) 55%,var(--indigo));
+    box-shadow:0 16px 44px rgba(37,99,235,.4);transition:transform .25s cubic-bezier(.16,1,.3,1),box-shadow .25s;will-change:transform}
+  .btn:hover{box-shadow:0 22px 60px rgba(37,99,235,.55)}
+  .btn .arrow{transition:transform .3s}.btn:hover .arrow{transform:translateX(5px)}
+  .cta small{display:block;margin-top:20px;color:var(--muted);font-family:var(--mono);font-size:13px}
+
+  footer{text-align:center;padding:46px 24px;color:#8089a0;font-family:var(--mono);font-size:12px;border-top:1px solid var(--line)}
+
+  @media(max-width:880px){
+    .hero{grid-template-columns:1fr;text-align:center;min-height:auto;padding-top:130px}
+    .hero-copy{margin:0 auto}.live{justify-content:center}
+    .stage{order:-1;margin-bottom:6px}
+    .g2,.g3,.steps,.stats,.facts{grid-template-columns:1fr}
+    section{padding:88px 20px}
+  }
+  @media(min-width:881px) and (max-width:1024px){.g3{grid-template-columns:repeat(2,1fr)}.steps{grid-template-columns:repeat(2,1fr)}}
+  @media(prefers-reduced-motion:reduce){*{animation:none!important}.reveal,.char{transition:none;opacity:1;transform:none}}
+</style>
+</head>
+<body>
+<div class="bg-grid"></div>
+<canvas id="fx"></canvas>
+<div class="scanline"></div>
+<div class="progress" id="prog"></div>
+
+<div class="wrap">
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-copy reveal">
+    <span class="tag">SYS://ai-manager · online</span>
+    <h1 data-split>Бот, который <span class="grad">отвечает за вас</span> 24/7</h1>
+    <p class="lead">Умный менеджер типографии в Telegram: консультирует клиентов, собирает заявки и не теряет ни одного заказа — ни днём, ни ночью.</p>
+    <div class="live"><span class="dot"></span> готовое работающее решение · уже в деле</div>
+  </div>
+
+  <div class="stage reveal d2">
+    <div class="ring"></div><div class="ring r2"></div>
+    <!-- DETAILED ADULT ROBOT -->
+    <svg class="robot" viewBox="0 0 380 460" xmlns="http://www.w3.org/2000/svg" aria-label="Робот-менеджер типографии">
+      <defs>
+        <linearGradient id="shell" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#dbe3f0"/>
+        </linearGradient>
+        <linearGradient id="shellDark" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#e7edf6"/><stop offset="1" stop-color="#c2cde0"/>
+        </linearGradient>
+        <linearGradient id="visorG" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#0b1530"/><stop offset="1" stop-color="#13234a"/>
+        </linearGradient>
+        <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stop-color="#06b6d4"/><stop offset="1" stop-color="#4f46e5"/>
+        </linearGradient>
+        <radialGradient id="eyeGlow" cx="50%" cy="50%" r="50%">
+          <stop offset="0" stop-color="#5eead4"/><stop offset="1" stop-color="#22d3ee" stop-opacity="0"/>
+        </radialGradient>
+        <filter id="soft"><feGaussianBlur stdDeviation="2.2"/></filter>
+      </defs>
+
+      <!-- scanning beam from visor onto tablet -->
+      <polygon class="beam" points="190,150 250,150 300,330 150,330" fill="url(#eyeGlow)" opacity=".0"/>
+
+      <!-- antenna / status crest -->
+      <rect x="184" y="30" width="12" height="26" rx="6" fill="url(#shellDark)"/>
+      <circle class="mic-led" cx="190" cy="26" r="7" fill="#22d3ee"/>
+
+      <!-- neck -->
+      <rect x="166" y="150" width="48" height="34" rx="10" fill="url(#shellDark)"/>
+      <rect x="170" y="156" width="40" height="6" rx="3" fill="#aebbd2"/>
+      <rect x="170" y="166" width="40" height="6" rx="3" fill="#aebbd2"/>
+
+      <!-- HEAD -->
+      <rect x="98" y="52" width="184" height="120" rx="40" fill="url(#shell)" stroke="#c2cde0" stroke-width="2"/>
+      <!-- top seam + screw detail -->
+      <path d="M120 70 H260" stroke="#cdd7e8" stroke-width="2" fill="none"/>
+      <circle cx="118" cy="98" r="3" fill="#b9c5da"/><circle cx="262" cy="98" r="3" fill="#b9c5da"/>
+      <!-- headset earpiece -->
+      <path d="M96 96 q-22 18 0 50" stroke="url(#accent)" stroke-width="7" fill="none" stroke-linecap="round"/>
+      <rect x="78" y="100" width="26" height="46" rx="13" fill="url(#shellDark)" stroke="#c2cde0" stroke-width="2"/>
+      <circle class="led" cx="91" cy="123" r="5" fill="#22d3ee"/>
+      <rect x="284" y="100" width="20" height="46" rx="10" fill="url(#shellDark)" stroke="#c2cde0" stroke-width="2"/>
+      <!-- mic boom (manager headset) -->
+      <path d="M104 140 q-30 22 -34 60" stroke="#c2cde0" stroke-width="5" fill="none" stroke-linecap="round"/>
+      <circle class="mic-led" cx="70" cy="202" r="8" fill="url(#accent)"/>
+
+      <!-- VISOR -->
+      <rect class="visor" x="120" y="86" width="140" height="58" rx="26" fill="url(#visorG)"/>
+      <rect x="120" y="86" width="140" height="58" rx="26" fill="none" stroke="#0a1430" stroke-width="2"/>
+      <!-- eyes -->
+      <g class="blink">
+        <circle cx="160" cy="115" r="18" fill="url(#eyeGlow)"/>
+        <circle cx="220" cy="115" r="18" fill="url(#eyeGlow)"/>
+        <g class="pupil" fill="#5eead4">
+          <circle cx="160" cy="115" r="8"/><circle cx="220" cy="115" r="8"/>
+        </g>
+      </g>
+
+      <!-- TORSO -->
+      <path d="M118 196 q72 -22 144 0 l14 150 q-86 26 -172 0 z" fill="url(#shell)" stroke="#c2cde0" stroke-width="2"/>
+      <!-- shoulder pads -->
+      <rect x="96" y="196" width="46" height="30" rx="14" fill="url(#shellDark)" stroke="#c2cde0" stroke-width="2"/>
+      <rect x="238" y="196" width="46" height="30" rx="14" fill="url(#shellDark)" stroke="#c2cde0" stroke-width="2"/>
+      <!-- chest core -->
+      <circle cx="190" cy="250" r="26" fill="#eef3fb" stroke="#c2cde0" stroke-width="2"/>
+      <circle cx="190" cy="250" r="15" fill="url(#accent)"/>
+      <circle cx="190" cy="250" r="15" fill="url(#eyeGlow)" opacity=".5"/>
+      <!-- status leds -->
+      <circle class="led" cx="150" cy="300" r="5" fill="#16c784"/>
+      <circle class="led l2" cx="168" cy="300" r="5" fill="#22d3ee"/>
+      <circle class="led l3" cx="186" cy="300" r="5" fill="#4f46e5"/>
+      <!-- chest panel lines -->
+      <path d="M140 320 H240" stroke="#cdd7e8" stroke-width="2"/>
+      <path d="M150 248 H120 M230 248 H260" stroke="#cdd7e8" stroke-width="2"/>
+
+      <!-- ARMS -->
+      <rect x="92" y="226" width="22" height="86" rx="11" fill="url(#shellDark)" stroke="#c2cde0" stroke-width="2" transform="rotate(8 103 269)"/>
+      <rect x="266" y="226" width="22" height="70" rx="11" fill="url(#shellDark)" stroke="#c2cde0" stroke-width="2" transform="rotate(-14 277 261)"/>
+
+      <!-- TABLET / clipboard with order -->
+      <g transform="rotate(-6 230 360)">
+        <rect x="196" y="312" width="96" height="120" rx="12" fill="#0e1a38" stroke="#1e3566" stroke-width="2"/>
+        <rect x="206" y="324" width="76" height="96" rx="6" fill="#0a2647"/>
+        <path class="tab-line" d="M216 344 H272" stroke="url(#accent)" stroke-width="4" fill="none" stroke-linecap="round"/>
+        <path class="tab-line" d="M216 362 H256" stroke="#22d3ee" stroke-width="4" fill="none" stroke-linecap="round" style="animation-delay:.3s"/>
+        <path class="tab-line" d="M216 380 H266" stroke="#5eead4" stroke-width="4" fill="none" stroke-linecap="round" style="animation-delay:.6s"/>
+        <rect x="216" y="396" width="44" height="12" rx="6" fill="url(#accent)"/>
+      </g>
+      <!-- hand holding tablet -->
+      <rect x="276" y="296" width="26" height="20" rx="9" fill="url(#shell)" stroke="#c2cde0" stroke-width="2" transform="rotate(-14 289 306)"/>
+    </svg>
+  </div>
+
+  <div class="scroll-cue"><div class="mouse"></div>SCROLL</div>
+</section>
+
+<!-- marquee -->
+<div class="marquee reveal">
+  <div class="track">
+    <span>визитки <b>·</b> листовки <b>·</b> баннеры <b>·</b> наклейки <b>·</b> брошюры <b>·</b> упаковка <b>·</b> расчёт цены <b>·</b> сроки <b>·</b> приём заявок <b>·</b></span>
+    <span>визитки <b>·</b> листовки <b>·</b> баннеры <b>·</b> наклейки <b>·</b> брошюры <b>·</b> упаковка <b>·</b> расчёт цены <b>·</b> сроки <b>·</b> приём заявок <b>·</b></span>
+  </div>
+</div>
+
+<!-- PROBLEMS -->
+<section>
+  <div class="head reveal">
+    <div class="idx">01 — проблема</div>
+    <span class="tag">Знакомо?</span>
+    <h2>Бизнес теряет клиентов на одних<br>и тех же мелочах</h2>
+  </div>
+  <div class="grid g2">
+    <div class="card reveal d1"><div class="ico">🌙</div><h3>Пишут вечером и в выходные</h3><p>Сообщение остаётся без ответа до утра — и человек уходит к конкуренту.</p></div>
+    <div class="card reveal d2"><div class="ico">⏳</div><h3>Менеджер не успевает</h3><p>Поток однотипных вопросов отнимает время от реальной работы.</p></div>
+    <div class="card reveal d3"><div class="ico">🔁</div><h3>Одни и те же вопросы</h3><p>«Сколько стоит?», «какие сроки?», «а вы делаете…?» — десятки раз в день.</p></div>
+    <div class="card reveal d4"><div class="ico">📋</div><h3>Заявки теряются в переписке</h3><p>Заказ обсудили — и забыли записать. Клиент не дождался и ушёл.</p></div>
+  </div>
+</section>
+
+<!-- SOLUTION -->
+<section>
+  <div class="head reveal">
+    <div class="idx">02 — решение</div>
+    <span class="tag">Что умеет бот</span>
+    <h2>Сотрудник, который <span class="grad">работает за вас</span></h2>
+    <p class="lead">Никогда не устаёт, не уходит на обед и помнит весь контекст разговора.</p>
+  </div>
+  <div class="grid g3">
+    <div class="card reveal d1"><div class="ico">🕐</div><h3>Отвечает 24/7</h3><p>Без выходных и перерывов. Клиент получает ответ сразу, в любое время.</p></div>
+    <div class="card reveal d2"><div class="ico">💬</div><h3>Консультирует как человек</h3><p>Живо общается по вашим услугам, ценам и условиям — не по сухому шаблону.</p></div>
+    <div class="card reveal d3"><div class="ico">📨</div><h3>Собирает заявки</h3><p>Уточняет детали заказа и передаёт заявку вам. Ничего не теряется.</p></div>
+    <div class="card reveal d1"><div class="ico">⚡</div><h3>Разгружает менеджера</h3><p>Берёт на себя рутинные вопросы — сотрудник занят реальными задачами.</p></div>
+    <div class="card reveal d2"><div class="ico">⚙️</div><h3>Настраивается под вас</h3><p>Ваши услуги, цены, стиль общения, график и выходные.</p></div>
+    <div class="card reveal d3"><div class="ico">🎯</div><h3>Не упускает клиентов</h3><p>Каждое обращение обработано — даже ночью и в пик загрузки.</p></div>
+  </div>
+</section>
+
+<!-- HOW -->
+<section>
+  <div class="head reveal">
+    <div class="idx">03 — как это работает</div>
+    <span class="tag">Процесс</span>
+    <h2>Клиент пишет в Telegram —<br>бот всё делает сам</h2>
+  </div>
+  <div class="steps">
+    <div class="step reveal d1"><div class="n">01</div><h3>Клиент пишет</h3><p>Задаёт вопрос в Telegram в любое время дня и ночи.</p></div>
+    <div class="step reveal d2"><div class="n">02</div><h3>Бот отвечает</h3><p>Консультирует по услугам, ценам и срокам — мгновенно и живо.</p></div>
+    <div class="step reveal d3"><div class="n">03</div><h3>Уточняет заказ</h3><p>Собирает детали: что, сколько, какие параметры.</p></div>
+    <div class="step reveal d4"><div class="n">04</div><h3>Передаёт заявку</h3><p>Готовую заявку отправляет вам — вы связываетесь и выполняете.</p></div>
+  </div>
+
+  <div class="chat reveal d2" id="chat">
+    <div class="ctop"><div class="av">🤖</div><div><b>Бот типографии</b><br><span>● online</span></div></div>
+    <div class="msgs">
+      <div class="bub in">Здравствуйте! Сделаете 200 визиток с ламинацией?</div>
+      <div class="bub out">Да, конечно 🙌 Визитки 90×50 мм, матовая или глянцевая ламинация. 200 шт — от 1 рабочего дня.</div>
+      <div class="bub in">А сколько будет стоить?</div>
+      <div class="bub out">200 шт с матовой ламинацией — 1 400 ₽. Подскажите имя и телефон — оформлю заявку и передам менеджеру 📋</div>
+    </div>
+  </div>
+  <div class="note reveal">// бот учитывает ваш график и выходные — в нерабочие дни корректно отвечает и принимает обращения</div>
+</section>
+
+<!-- PROOF -->
+<section>
+  <div class="head reveal">
+    <div class="idx">04 — пруф</div>
+    <span class="tag">Это уже работает</span>
+    <h2>Не идея — <span class="grad">реальный бот</span> в деле</h2>
+    <p class="lead">Разработан и запущен для действующей типографии. Реальные клиенты, реальные заказы.</p>
+  </div>
+  <div class="stats">
+    <div class="stat reveal d1"><div class="num grad" data-to="24" data-suf="/7">0</div><div class="lbl">бот на связи без перерывов</div></div>
+    <div class="stat reveal d2"><div class="num grad" data-to="0" data-suf="">0</div><div class="lbl">пропущенных обращений ночью</div></div>
+    <div class="stat reveal d3"><div class="num grad" data-to="100" data-suf="%">0</div><div class="lbl">заявок зафиксировано и передано</div></div>
+  </div>
+  <div class="facts">
+    <div class="fact reveal d1"><span class="ck">✓</span><p>Различает клиента и менеджера — не мешает живому общению.</p></div>
+    <div class="fact reveal d2"><span class="ck">✓</span><p>Не выдумывает цены и услуги — отвечает только по вашим данным.</p></div>
+    <div class="fact reveal d3"><span class="ck">✓</span><p>Работает в Telegram, где уже сидят ваши клиенты — ставить ничего не нужно.</p></div>
+    <div class="fact reveal d4"><span class="ck">✓</span><p>Данные и история сохраняются — бот помнит контекст разговора.</p></div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta">
+  <div class="cta-card reveal">
+    <span class="tag">без обязательств</span>
+    <h2>Хотите такого <span class="grad">ИИ-менеджера</span><br>для своего бизнеса?</h2>
+    <p class="lead" style="margin:18px auto 0">Настрою под ваши услуги, цены и стиль общения. Покажу, как бот работает вживую, и отвечу на все вопросы.</p>
+    <a class="btn" id="cta" href="https://t.me/m/G8n-JN4aMzVi" target="_blank" rel="noopener">Хочу ИИ-менеджера <span class="arrow">→</span></a>
+    <small>напишите мне в Telegram — отвечу лично</small>
+  </div>
+</section>
+
+<footer>SYS://ai-manager для типографии · умный Telegram-бот, который не теряет клиентов</footer>
+
+</div>
+
+<script>
+// reveal
+const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target)}}),{threshold:.15});
+document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
+
+// split hero headline into chars
+document.querySelectorAll('[data-split]').forEach(h=>{
+  const html=h.innerHTML;
+  // wrap text nodes only, keep <span> wrappers
+  const walk=node=>{
+    [...node.childNodes].forEach(n=>{
+      if(n.nodeType===3){
+        const frag=document.createDocumentFragment();
+        [...n.textContent].forEach(ch=>{
+          if(ch===' '){frag.appendChild(document.createTextNode(' '));return;}
+          const s=document.createElement('span');s.className='char';s.textContent=ch;frag.appendChild(s);
+        });
+        n.replaceWith(frag);
+      }else if(n.nodeType===1){walk(n);}
+    });
+  };
+  walk(h);
+  const chars=h.querySelectorAll('.char');
+  chars.forEach((c,i)=>setTimeout(()=>c.classList.add('in'),250+i*28));
+});
+
+// scroll progress
+addEventListener('scroll',()=>{
+  const h=document.documentElement;const p=h.scrollTop/(h.scrollHeight-h.clientHeight);
+  document.getElementById('prog').style.width=(p*100)+'%';
+},{passive:true});
+
+// robot parallax
+const stage=document.querySelector('.stage');
+addEventListener('mousemove',e=>{
+  const x=(e.clientX/innerWidth-.5)*18,y=(e.clientY/innerHeight-.5)*18;
+  stage.style.transform=`translate(${x}px,${y}px)`;
+},{passive:true});
+
+// card spotlight
+document.querySelectorAll('.card').forEach(c=>{
+  c.addEventListener('mousemove',e=>{const r=c.getBoundingClientRect();
+    c.style.setProperty('--mx',(e.clientX-r.left)+'px');c.style.setProperty('--my',(e.clientY-r.top)+'px');
+    const rx=((e.clientY-r.top)/r.height-.5)*-6,ry=((e.clientX-r.left)/r.width-.5)*6;
+    c.style.transform=`perspective(800px) rotateX(${rx}deg) rotateY(${ry}deg) translateY(-4px)`;});
+  c.addEventListener('mouseleave',()=>c.style.transform='');
+});
+
+// counters
+const cio=new IntersectionObserver(es=>es.forEach(e=>{
+  if(!e.isIntersecting)return;const el=e.target,to=+el.dataset.to,suf=el.dataset.suf||'';let n=0;
+  const t=setInterval(()=>{n+=Math.max(1,Math.ceil(to/30));if(n>=to){n=to;clearInterval(t)}el.textContent=n+suf;},28);
+  if(to===0)el.textContent='0'+suf;cio.unobserve(el);
+}),{threshold:.6});
+document.querySelectorAll('.num').forEach(el=>cio.observe(el));
+
+// chat sequence
+const chat=document.getElementById('chat'),bubs=[...chat.querySelectorAll('.bub')];
+new IntersectionObserver((es,o)=>es.forEach(e=>{if(e.isIntersecting){bubs.forEach((b,i)=>setTimeout(()=>b.classList.add('show'),300+i*700));o.unobserve(e.target)}}),{threshold:.4}).observe(chat);
+
+// magnetic CTA
+const cta=document.getElementById('cta');
+cta.addEventListener('mousemove',e=>{const r=cta.getBoundingClientRect();
+  cta.style.transform=`translate(${(e.clientX-r.left-r.width/2)*.3}px,${(e.clientY-r.top-r.height/2)*.4}px) scale(1.04)`;});
+cta.addEventListener('mouseleave',()=>cta.style.transform='');
+
+// particle network canvas
+const cv=document.getElementById('fx'),ctx=cv.getContext('2d');let W,H,parts;
+function resize(){W=cv.width=innerWidth;H=cv.height=innerHeight;
+  parts=Array.from({length:Math.min(70,Math.floor(W/22))},()=>({x:Math.random()*W,y:Math.random()*H,vx:(Math.random()-.5)*.35,vy:(Math.random()-.5)*.35}));}
+resize();addEventListener('resize',resize);
+function tick(){ctx.clearRect(0,0,W,H);
+  for(const p of parts){p.x+=p.vx;p.y+=p.vy;if(p.x<0||p.x>W)p.vx*=-1;if(p.y<0||p.y>H)p.vy*=-1;
+    ctx.beginPath();ctx.arc(p.x,p.y,1.6,0,7);ctx.fillStyle='rgba(37,99,235,.5)';ctx.fill();}
+  for(let i=0;i<parts.length;i++)for(let j=i+1;j<parts.length;j++){
+    const a=parts[i],b=parts[j],dx=a.x-b.x,dy=a.y-b.y,d=Math.hypot(dx,dy);
+    if(d<120){ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);
+      ctx.strokeStyle='rgba(37,99,235,'+(.13*(1-d/120))+')';ctx.lineWidth=1;ctx.stroke();}}
+  requestAnimationFrame(tick);}
+if(!matchMedia('(prefers-reduced-motion:reduce)').matches)tick();
+</script>
+</body>
+</html>
